@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"regexp"
 
 	"github.com/elazarl/goproxy"
+	"github.com/valyala/bytebufferpool"
 )
 
 var (
@@ -71,7 +71,7 @@ func main() {
 			}
 			originalURL := u.String()
 			if *verbose {
-				log.Printf("[%d] original url: %s\n", ctx.Session, originalURL)
+				log.Printf("[%03d] DEBUG: request original url: %s\n", ctx.Session, originalURL)
 			}
 
 			newURL, err := url.Parse(mirrorRegex.ReplaceAllString(originalURL, *mirrorReplace))
@@ -79,7 +79,7 @@ func main() {
 				log.Panic(newURL)
 			}
 			if *verbose {
-				log.Printf("[%d] new url: %s\n", ctx.Session, newURL.String())
+				log.Printf("[%03d] DEBUG: new mirror url: %s\n", ctx.Session, newURL.String())
 			}
 
 			r.URL = newURL
@@ -92,9 +92,15 @@ func main() {
 
 			defer resp.Body.Close()
 			if *verbose {
-				buf := &bytes.Buffer{}
-				buf.ReadFrom(resp.Body)
-				log.Printf("[%d] response body: \n%s\n", ctx.Session, buf.Bytes())
+				log.Printf("[%03d] DEBUG: received mirror response: %s\n", ctx.Session, resp.Status)
+				buf := bytebufferpool.Get()
+				defer bytebufferpool.Put(buf)
+				_, err := buf.ReadFrom(resp.Body)
+				if err != nil {
+					log.Printf("[%03d] WARN: error reading mirror response body: \n%s\n", ctx.Session, err)
+				} else {
+					log.Printf("[%03d] DEBUG: mirror response body: \n%s\n", ctx.Session, buf.Bytes())
+				}
 			} else {
 				_, _ = io.Copy(io.Discard, resp.Body)
 			}
