@@ -17,13 +17,15 @@ import (
 var (
 	listen        = flag.String("listen", ":12345", "Listen at this address.")
 	upstream      = flag.String("upstream", "http://localhost:8080", "Proxy traffic to this upstream URL.")
-	mirrorPattern = flag.String("mirror.pattern", `(https?)://([^/]+)(.*)`, "A regex pattern that matches on the original request URL.")
+	mirrorPattern = flag.String("mirror.pattern", `^(https?)://([^/]+)(.*)$`, "A regex pattern that matches on the original request URL.")
 	mirrorReplace = flag.String("mirror.replace", "$1://$2$3", "Send to the mirror server by replacing the URL matched by -mirror.pattern with this. Allows regex substitution.")
+	mirrorIgnore  = flag.String("mirror.ignore", "^https?://[^/]+/(ready|readyz|healthy|healthz|external-health-check|metrics)$", "Ignore requests for URLs matching this regexp pattern.")
 	verbose       = flag.Bool("verbose", false, "Print debug information.")
 )
 
 var (
-	mirrorRegex *regexp.Regexp
+	mirrorPatternRegex *regexp.Regexp
+	mirrorIgnoreRegex  *regexp.Regexp
 
 	upstreamURL      *url.URL
 	upstreamDirector func(*http.Request)
@@ -39,7 +41,8 @@ func init() {
 		log.Panic(err)
 	}
 
-	mirrorRegex = regexp.MustCompile(*mirrorPattern)
+	mirrorPatternRegex = regexp.MustCompile(*mirrorPattern)
+	mirrorIgnoreRegex = regexp.MustCompile(*mirrorIgnore)
 
 	upstreamDirector = httputil.NewSingleHostReverseProxy(upstreamURL).Director
 }
@@ -62,19 +65,15 @@ func main() {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = *verbose
 	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		go func(r *http.Request) {
+		sendMirrorCopy := func(r *http.Request) {
 			u := *r.URL
-			if r.Host != "" {
-				u.Host = r.Host
-			} else if h := r.Header.Get("Host"); h != "" {
-				u.Host = h
-			}
+			u.RawQuery = ""
 			originalURL := u.String()
 			if *verbose {
 				log.Printf("[%03d] DEBUG: request original url: %s\n", ctx.Session, originalURL)
 			}
 
-			newURL, err := url.Parse(mirrorRegex.ReplaceAllString(originalURL, *mirrorReplace))
+			newURL, err := url.Parse(mirrorPatternRegex.ReplaceAllString(originalURL, *mirrorReplace))
 			if err != nil {
 				log.Panic(newURL)
 			}
@@ -104,7 +103,18 @@ func main() {
 			} else {
 				_, _ = io.Copy(io.Discard, resp.Body)
 			}
-		}(req.Clone(context.Background()))
+		}
+
+		u := *req.URL
+		u.RawQuery = ""
+		if req.Host != "" {
+			u.Host = req.Host
+		} else if h := req.Header.Get("Host"); h != "" {
+			u.Host = h
+		}
+		if !mirrorIgnoreRegex.MatchString(u.String()) {
+			go sendMirrorCopy(req.Clone(context.Background()))
+		}
 
 		if req.Host == "" {
 			req.Host = req.URL.Host
