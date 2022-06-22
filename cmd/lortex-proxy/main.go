@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -115,7 +116,14 @@ func main() {
 			u.Host = h
 		}
 		if !mirrorIgnoreRegex.MatchString(u.String()) {
-			go sendMirrorCopy(req.Clone(context.Background()))
+			r2 := req.Clone(context.Background())
+			// https://github.com/golang/go/issues/36095#issuecomment-568239806
+			var b bytes.Buffer
+			b.ReadFrom(req.Body)
+			req.Body.Close()
+			req.Body = io.NopCloser(&b)
+			r2.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
+			go sendMirrorCopy(r2)
 		} else if *verbose {
 			log.Printf("[%03d] DEBUG: not sending request to mirror\n", ctx.Session)
 		}
