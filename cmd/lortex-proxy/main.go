@@ -87,6 +87,7 @@ func main() {
 
 			resp, err := http.DefaultTransport.RoundTrip(r)
 			if err != nil {
+				log.Printf("[%03d] WARN: error sending to mirror: %s\n", ctx.Session, err)
 				return
 			}
 
