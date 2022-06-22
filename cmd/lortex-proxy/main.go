@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/elazarl/goproxy"
 	"github.com/valyala/bytebufferpool"
+
+	"github.com/mintel/lortex-proxy/pkg/request"
 )
 
 var (
@@ -116,14 +117,9 @@ func main() {
 			u.Host = h
 		}
 		if !mirrorIgnoreRegex.MatchString(u.String()) {
-			r2 := req.Clone(context.Background())
-			// https://github.com/golang/go/issues/36095#issuecomment-568239806
-			var b bytes.Buffer
-			b.ReadFrom(req.Body)
-			req.Body.Close()
-			req.Body = io.NopCloser(&b)
-			r2.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
-			go sendMirrorCopy(r2)
+			var req2 *http.Request
+			req, req2 = request.Clone(context.Background(), req)
+			go sendMirrorCopy(req2)
 		} else if *verbose {
 			log.Printf("[%03d] DEBUG: not sending request to mirror\n", ctx.Session)
 		}
