@@ -74,6 +74,7 @@ func main() {
 			}
 
 			newURL, err := url.Parse(mirrorPatternRegex.ReplaceAllString(originalURL, *mirrorReplace))
+			newURL.RawQuery = r.URL.RawQuery
 			if err != nil {
 				log.Panic(newURL)
 			}
