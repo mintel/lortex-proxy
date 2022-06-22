@@ -11,6 +11,7 @@ import (
 	"regexp"
 
 	"github.com/elazarl/goproxy"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/bytebufferpool"
 
 	"github.com/mintel/lortex-proxy/pkg/request"
@@ -131,7 +132,9 @@ func main() {
 
 		return req, nil
 	})
-	if err := http.ListenAndServe(*listen, &schemeWrapper{proxy}); err != nil {
+	http.Handle("/-/metrics", promhttp.Handler())
+	http.Handle("/", &schemeWrapper{proxy})
+	if err := http.ListenAndServe(*listen, nil); err != nil {
 		log.Fatal(err)
 	}
 }
