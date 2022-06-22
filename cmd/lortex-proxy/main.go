@@ -114,6 +114,8 @@ func main() {
 		}
 		if !mirrorIgnoreRegex.MatchString(u.String()) {
 			go sendMirrorCopy(req.Clone(context.Background()))
+		} else if *verbose {
+			log.Printf("[%03d] DEBUG: not sending request to mirror\n", ctx.Session)
 		}
 
 		if req.Host == "" {
