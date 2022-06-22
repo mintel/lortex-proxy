@@ -63,7 +63,13 @@ func main() {
 	proxy.Verbose = *verbose
 	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		go func(r *http.Request) {
-			originalURL := r.URL.String()
+			u := *r.URL
+			if r.Host != "" {
+				u.Host = r.Host
+			} else if h := r.Header.Get("Host"); h != "" {
+				u.Host = h
+			}
+			originalURL := u.String()
 			if *verbose {
 				log.Printf("[%d] original url: %s\n", ctx.Session, originalURL)
 			}
