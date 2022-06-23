@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/valyala/bytebufferpool"
@@ -13,7 +12,7 @@ import (
 const minBufferSize = 32 * 1024 // This is what's used by io.Copy internally.
 
 func Clone(ctx context.Context, req *http.Request) (*http.Request, *http.Request) {
-	return clone2(ctx, req)
+	return clone1(ctx, req)
 }
 
 // clone1 fans out by reads the entire request body and creates two io.Readers from it.
@@ -25,26 +24,6 @@ func clone1(ctx context.Context, req *http.Request) (*http.Request, *http.Reques
 	req.Body.Close()
 	req.Body = io.NopCloser(&b)
 	req2.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
-	return req, req2
-}
-
-// clone2 fans using io.Pipe.
-func clone2(ctx context.Context, req *http.Request) (*http.Request, *http.Request) {
-	originalBody := req.Body
-	req2 := req.Clone(ctx)
-	p1r, p1w := io.Pipe()
-	p2r, p2w := io.Pipe()
-	w := io.MultiWriter(p1w, p2w)
-	go func() {
-		defer originalBody.Close()
-		defer p1w.Close()
-		defer p2w.Close()
-		if _, err := ioCopy(w, originalBody); err != nil {
-			log.Panic(err)
-		}
-	}()
-	req.Body = p1r
-	req2.Body = p2r
 	return req, req2
 }
 

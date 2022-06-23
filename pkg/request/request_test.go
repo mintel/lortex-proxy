@@ -90,7 +90,3 @@ func benchmarkCloneFunc(b *testing.B, f func(ctx context.Context, req *http.Requ
 func Benchmark_clone1(b *testing.B) {
 	benchmarkCloneFunc(b, clone1)
 }
-
-func Benchmark_clone2(b *testing.B) {
-	benchmarkCloneFunc(b, clone2)
-}
