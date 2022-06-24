@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/valyala/bytebufferpool"
@@ -18,12 +19,27 @@ func Clone(ctx context.Context, req *http.Request) (*http.Request, *http.Request
 // clone1 fans out by reads the entire request body and creates two io.Readers from it.
 func clone1(ctx context.Context, req *http.Request) (*http.Request, *http.Request) {
 	req2 := req.Clone(ctx)
+	if req.GetBody != nil {
+		body, err := req.GetBody()
+		if err != nil {
+			log.Printf("warn: error from request.GetBody: %s", err)
+		} else {
+			req2.Body = body
+			req2.GetBody = req.GetBody
+			return req, req2
+		}
+	}
 	// https://github.com/golang/go/issues/36095#issuecomment-568239806
 	var b bytes.Buffer
 	ioCopy(&b, req.Body)
 	req.Body.Close()
-	req.Body = io.NopCloser(&b)
+	req.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
 	req2.Body = io.NopCloser(bytes.NewReader(b.Bytes()))
+	getBody := func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(b.Bytes())), nil
+	}
+	req.GetBody = getBody
+	req2.GetBody = getBody
 	return req, req2
 }
 
