@@ -132,9 +132,24 @@ func main() {
 
 		return req, nil
 	})
-	http.Handle("/-/metrics", promhttp.Handler())
-	http.Handle("/", &schemeWrapper{proxy})
+	var handler http.Handler = &schemeWrapper{proxy}
+	var metricsHandler http.Handler = promhttp.Handler()
+	if *verbose {
+		handler = loggingHandler(handler)
+		metricsHandler = loggingHandler(metricsHandler)
+	}
+	http.Handle("/-/metrics", metricsHandler)
+	http.Handle("/", handler)
 	if err := http.ListenAndServe(*listen, nil); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func loggingHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			log.Println(r.Proto, r.Method, r.URL.Path, r.RemoteAddr, r.UserAgent())
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
